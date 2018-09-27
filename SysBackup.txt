@@ -1,0 +1,237 @@
+#!/bin/bash
+
+GravarLog(){
+   DATAINICIO="Data Inicio: "$(date +"%d-%m-%Y")
+   HORAINICIO="Hora Inicio: "$(date +"%H:%M:%S")
+   METODO="$1"
+   DATAFIM="Data Fim: "$(date +"%d-%m-%Y")
+   HORAFIM="Hora Fim: "$(date +"%H:%M:%S")
+
+   if [ "$2" == 0 ]
+   then
+      STATUS="Success"
+      echo ""
+      echo "###################"
+      echo "###   Success   ###"
+      echo "###################"
+   else
+      STATUS="Fail"
+      echo ""
+      echo "####################"
+      echo "###     Fail     ###"
+      echo "####################"
+      echo ""
+   fi
+
+   echo -ne "$DATAINICIO\n $HORAINICIO\n $METODO\n $DATAFIM\n $HORAFIM\n $STATUS\n\n" >> /root/logs.txt
+}
+
+VerificaPasta(){
+
+   test -d "$1" && echo "Arquivo/pasta $1 encontrado!"
+   test -d !"$1" && echo "Arquivo/Pasta $1 não foi encontrado" && Menu
+   test -d "$2" && echo "Arquivo/Pasta $2 encontrado!" || CriarPasta "$2"
+
+   cd "$2"
+   echo ""
+}
+
+CriarPasta(){
+   echo "Diretório não encontrado. Deseja criar a pasta:[S][N] "
+   read RESP
+
+   case $RESP in
+      s) mkdir "$1" ;;
+      n) Menu ;;
+   esac
+}
+
+A(){
+   echo -n "Qual pasta deseja fazer backup? "
+   read LOCALBACKUP
+
+   echo -n "Onde deseja armazenar este backup? "
+   read DESTBACKUP
+
+   VerificaPasta "$LOCALBACKUP" "$DESTBACKUP"
+
+   DATA=$(date +"%d-%m-%Y")
+
+   tar -zcvf "$DATA".tar.gz "$LOCALBACKUP"
+   STATUS=$?
+   METODO="Fazer Backup Arquivo/Pasta"
+   GravarLog "$METODO" "$STATUS"
+   Menu
+}
+
+B(){
+   echo -n "Qual pasta deseja restaurar? "
+   read RESTAURA
+
+   echo -n "Onde deseja restaurar? "
+   read LOCALRESTAURA
+
+   VerificaPasta "$RESTAURA" "$LOCALRESTAURA"
+
+   tar -zxvf "$RESTAURA".tar.gz
+   STATUS=$?
+   METODO="Restaurar Backup Arquivo/Pasta"
+   GravarLog "$METODO" "$STATUS"
+   Menu
+}
+
+C(){
+   echo -n "Onde deseja armazenar o backup: "
+   read DESTBACKUP
+   test -d "$DESTBACKUP" || CriarPasta "$DESTBACKUP"
+
+   echo -n "Endereço do servidor: "
+   read ENDERECO
+
+   echo -n "Nome do backup: "
+   read NOMEBACKUP
+
+   echo -n "Usuario Base de Dados: "
+   read USUARIO
+
+   echo -n "Senha Base de Dados: "
+   read -s SENHA
+   echo ""
+
+   mysql -h"$ENDERECO" -u "$USUARIO" -p"$SENHA" -e "show databases"
+
+   echo -n "Escolha a base de dados: "
+   read BASEDADOS
+
+   DATA=$(date +"%d-%m-%Y")
+
+   cd "$DESTBACKUP"
+   mysqldump -h "$ENDERECO" -u "$USUARIO" -p"$SENHA" "$BASEDADOS" > "$DATA-$NOMEBACKUP".sql
+   tar -zcvf "$DATA-$NOMEBACKUP".tar.gz "$DATA-$NOMEBACKUP".sql
+   rm "$DATA-$NOMEBACKUP".sql
+   STATUS=$?
+   METODO="Fazer Backup MySql"
+   GravarLog "$METODO" "$STATUS"
+
+   Menu
+}
+
+D(){
+   echo -n "Onde esta o backup a ser restaurado? "
+   read RESTOREBACKUP
+
+   echo -n "Qual o nome do backup a ser restaurado? "
+   read NOMERESTORE
+
+   echo -n "Em qual base de dados restaurar o Backup? "
+   read BASEDADOS
+
+   echo -n "Endereço do servidor: "
+   read ENDERECO
+
+   echo -n "Usuario do Banco de Dados: "
+   read USUARIO
+
+   echo -n "Senha Base de Dados: "
+   read -s SENHA
+   echo ""
+
+   DATA=$(date +"%d-%m-%Y")
+
+   cd "$RESTOREBACKUP"
+   tar -zxvf "$NOMERESTORE".tar.gz
+   mysql -h "$ENDERECO" -u "$USUARIO" -p"$SENHA" "$BASEDADOS" < "$NOMERESTORE".sql
+   STATUS=$?
+   METODO="Restaurar Backup MySql"
+   GravarLog "$METODO" "$STATUS"
+
+   Menu
+}
+
+E(){
+   echo -n "Onde deseja salvar o backup: "
+   read DESTBACKUP
+   test -d "$DESTBACKUP" || CriarPasta "$DESTBACKUP"
+
+   su postgres -c "psql -l"
+
+   echo -n "Base de dados a ser feito o backup: "
+   read BASEDADOS
+
+   echo -n "Nome do backup: "
+   read NOMEBACKUP
+
+   echo -n "Endereço do servidor: "
+   read ENDERECO
+
+   echo -n "Usuario do banco: "
+   read USUARIO
+
+   DATA=$(date +"%d-%m-%Y")
+
+   cd "$DESTBACKUP"
+   pg_dump -h "$ENDERECO" -U "$USUARIO" "$BASEDADOS" > "$DATA-$NOMEBACKUP".sql
+   tar -zcvf "$DATA-$NOMEBACKUP".tar.gz "$DATA-$NOMEBACKUP".sql
+   rm "$DATA-$NOMEBACKUP".sql
+   STATUS=$?
+   METODO="Fazer Backup Postgres"
+   GravarLog "$METODO" "$STATUS"
+
+   Menu
+}
+
+F(){
+   echo -n "Onde esta o backup a ser restaurado? "
+   read RESTOREBACKUP
+
+   echo -n "Qual o nome do arquivo de backup? "
+   read NOMERESTORE
+
+   echo -n "Restaurar em qual base de dados? "
+   read BASEDADOS
+
+   echo -n "Endereço do servidor: "
+   read ENDERECO
+
+   echo -n "Usuario do banco de dados: "
+   read USUARIO
+
+   DATA=$(date +"%d-%m-%Y")
+
+   cd "$RESTOREBACKUP"
+   tar -zxvf "$NOMERESTORE".tar.gz
+   psql -h "$ENDERECO" -U "$USUARIO" -d "$BASEDADOS" < "$NOMERESTORE".sql
+   STATUS=$?
+   METODO="Restaurar Backup Postgres"
+   GravarLog "$METODO" "$STATUS"
+
+  Menu
+
+}
+
+Menu(){
+   echo ""
+   echo "a) Fazer Backup Arquivo/Pasta"
+   echo "b) Restaurar Backup Arquivo/Pasta"
+   echo "c) Fazer Backup MySql"
+   echo "d) Restaurar Backup MySql"
+   echo "e) Fazer Backup PostgreSQL"
+   echo "f) Restaurar Backup PostgreSQL"
+   echo "g) Sair"
+   echo ""
+
+   read RESPOSTA
+
+   case $RESPOSTA in
+      a) A ;;
+      b) B ;;
+      c) C ;;
+      d) D ;;
+      e) E ;;
+      f) F ;;
+      g) exit ;;
+      *) Menu ;;
+   esac
+}
+
+Menu
